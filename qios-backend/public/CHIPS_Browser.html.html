@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHIPS:// Browser & Quantum Node</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #0f172a; color: #e5e7eb; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem; }
+        .console { background-color: #1e293b; font-family: monospace; height: 400px; overflow-y: auto; border-radius: 0.5rem; padding: 1rem; }
+        .btn { background: #3b82f6; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+        canvas { background-color: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; display: block; }
+        textarea { background: #1e293b; border: 1px solid #334155; color: #e5e7eb; border-radius: 8px; }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        <header>
+            <h1 class="text-3xl font-bold">CHIPS:// Browser & Quantum Node</h1>
+            <p id="connection-status" class="text-red-500">Connecting to Back Office...</p>
+        </header>
+
+        <div class="grid-container">
+            <!-- Left Column: IDE & Console -->
+            <div class="space-y-6">
+                <section>
+                    <h2 class="text-xl font-semibold mb-3">Quantum Program IDE</h2>
+                    <textarea id="programEditor" class="w-full h-64 p-3 font-mono text-sm"></textarea>
+                    <div class="flex space-x-2 mt-2">
+                        <button id="runProgramBtn" class="btn">Run Program (Orchestrated)</button>
+                        <button id="loadExampleBtn" class="btn bg-gray-600">Load Entanglement Example</button>
+                    </div>
+                </section>
+                <section>
+                    <h2 class="text-xl font-semibold mb-3">Node Log</h2>
+                    <div id="nodeLog" class="console"></div>
+                </section>
+            </div>
+
+            <!-- Right Column: Visualization -->
+            <div class="space-y-6">
+                <section>
+                    <h2 class="text-xl font-semibold mb-3">Local Qubit Simulator</h2>
+                    <canvas id="quantumCanvas" class="w-full aspect-video"></canvas>
+                </section>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Simulator Code (Exactly as before, acts as the local quantum computer) ---
+    // NOTE: This part is a simplified placeholder. The full QuantumParticle classes, etc., would go here.
+    // For brevity, we will focus on the new client-server logic.
+    const canvas = document.getElementById('quantumCanvas');
+    const ctx = canvas.getContext('2d');
+    function drawPlaceholder() {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#9ca3af';
+        ctx.textAlign = 'center';
+        ctx.font = '20px Poppins';
+        ctx.fillText('Qubit Simulator Ready', canvas.width / 2, canvas.height / 2);
+    }
+    window.onresize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; drawPlaceholder(); };
+    window.onload = () => { window.onresize(); };
+
+    // --- NEW: Client-Server Communication Logic ---
+    const programEditor = document.getElementById('programEditor');
+    const runProgramBtn = document.getElementById('runProgramBtn');
+    const loadExampleBtn = document.getElementById('loadExampleBtn');
+    const nodeLog = document.getElementById('nodeLog');
+    const connectionStatus = document.getElementById('connection-status');
+
+    // IMPORTANT: In local testing, this is correct. For deployment, you will change this URL.
+    const socket = io("http://localhost:3000");
+
+    function log(message, type = 'info') {
+        const p = document.createElement('p');
+        p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        if (type === 'error') p.className = 'text-red-400';
+        else if (type === 'warn') p.className = 'text-yellow-400';
+        else p.className = 'text-cyan-400';
+        nodeLog.appendChild(p);
+        nodeLog.scrollTop = nodeLog.scrollHeight;
+    }
+
+    // --- Socket.io Event Handlers ---
+    socket.on('connect', () => {
+        connectionStatus.textContent = `Connected to Back Office. Node ID: ${socket.id}`;
+        connectionStatus.className = 'text-green-500';
+        log('Successfully connected to QIOS Back Office.', 'info');
+        socket.emit('register_node'); // Announce to the server that we are a node
+    });
+
+    socket.on('disconnect', () => {
+        connectionStatus.textContent = 'Disconnected from Back Office.';
+        connectionStatus.className = 'text-red-500';
+        log('Connection lost.', 'error');
+    });
+    
+    // Listen for commands from the Back Office
+    socket.on('execute_command', (data) => {
+        log(`Received command from orchestrator: ${data.command}`, 'warn');
+        // This is where you would hook in the actual simulator logic.
+        // For example: if (data.command === 'apply_hadamard') { getParticle(data.target).applyHadamard(); }
+        drawPlaceholder(); // Redraw the canvas to show state changes
+    });
+    
+    socket.on('log_message', (data) => {
+        log(data.message, data.type);
+    });
+
+    // --- User Actions ---
+    runProgramBtn.addEventListener('click', () => {
+        const programCode = programEditor.value;
+        if (!programCode) {
+            log('Program editor is empty.', 'error');
+            return;
+        }
+        log('Sending program to Back Office for orchestration...', 'info');
+        // Send the entire program to the server to be parsed and managed
+        socket.emit('run_program', { code: programCode });
+    });
+    
+    const exampleCode = `// This program demonstrates orchestration.\n// The Back Office will parse this and send commands back to the nodes.\n\nparticle alice_q1; // Will be created on this node\nparticle bob_q1;   // Will be created on another connected node\n\nhadamard alice_q1;\ncnot alice_q1, bob_q1; // This requires cross-node communication!\n\nmeasure alice_q1 -> c1;\nmeasure bob_q1 -> c2;`;
+    loadExampleBtn.addEventListener('click', () => {
+        programEditor.value = exampleCode;
+        log('Example cross-node entanglement program loaded.', 'info');
+    });
+
+</script>
+</body>
+</html>
